@@ -82,6 +82,8 @@ jobs:
               -r ./requirements/base.txt \
               -r ./requirements/dev.txt
           cdk synth playground > templates/playground.old.yaml
+          # TODO: synth fargate stack
+          echo "Resources:" > templates/fargate.old.yaml
           deactivate
           echo "::endgroup::"
           echo "::group::Switch back to HEAD"
@@ -96,9 +98,13 @@ jobs:
           cdk --no-color diff \
               --template ./templates/playground.old.yaml \
               playground 2>&1 | tee ./templates/playground.diff
+          cdk --no-color diff \
+              --template ./templates/fargate.old.yaml \
+              fargate 2>&1 | tee ./templates/fargate.diff
       - name: Generate templates
         run: |
           cdk synth playground > ./templates/playground.yaml
+          cdk synth fargate > ./templates/fargate.yaml
       - name: Report template changes
         run: |
           ls -l ./templates/
