@@ -1,10 +1,19 @@
 from aws_cdk import Fn, Stack, aws_codebuild as codebuild, aws_iam as iam
 from constructs import Construct
 
+from .imported_role import ImportedRole
+
 
 class PlaygroundStack(Stack):
     def __init__(self, scope: Construct, id_: str, **kwargs) -> None:
         super().__init__(scope, id_, **kwargs)
+
+        imported_role = ImportedRole(
+            self,
+            "CodeBuildRoleImported",
+            arn_export_name="CodeBuildRolePlaygroundARN",
+            name_export_name="CodeBuildRolePlaygroundName",
+        )
 
         codebuild.Project(
             self,
@@ -29,9 +38,5 @@ class PlaygroundStack(Stack):
                 environment_variables={},
                 privileged=True,
             ),
-            role=iam.Role.from_role_arn(
-                self,
-                "CodeBuildRole",
-                Fn.import_value("CodeBuildRolePlaygroundARN"),
-            ),
+            role=imported_role,
         )
