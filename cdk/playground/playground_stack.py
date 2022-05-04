@@ -1,4 +1,4 @@
-from aws_cdk import Fn, Stack, aws_codebuild as codebuild
+from aws_cdk import Fn, Stack, aws_codebuild as codebuild, aws_iam as iam
 from constructs import Construct
 
 
@@ -28,5 +28,10 @@ class PlaygroundStack(Stack):
                 compute_type=codebuild.ComputeType.SMALL,
                 environment_variables={},
                 privileged=True,
+            ),
+            role=iam.Role.from_role_arn(
+                self,
+                "CodeBuildRole",
+                Fn.import_value("CodeBuildRolePlaygroundARN"),
             ),
         )
