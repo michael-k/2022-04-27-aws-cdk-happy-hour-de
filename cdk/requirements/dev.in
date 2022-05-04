@@ -1,0 +1,4 @@
+-c base.txt
+black>=22.3.0
+httpx>=0.22.0
+isort>=5.10.1

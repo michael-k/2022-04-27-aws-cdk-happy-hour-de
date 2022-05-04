@@ -1,0 +1,15 @@
+[tool.black]
+# See https://github.com/ambv/black/blob/master/pyproject.toml
+line-length = 88
+target_version = ["py39"]
+
+
+[tool.isort]
+profile = "black"
+balanced_wrapping = true
+combine_as_imports = true
+default_section = "THIRDPARTY"
+indent = "    "
+known_first_party = [
+    "playground",
+]

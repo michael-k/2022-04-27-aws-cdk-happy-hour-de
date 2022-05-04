@@ -1,0 +1,58 @@
+---
+name: Lint
+# yamllint disable rule:truthy
+on: [push, workflow_dispatch]
+# yamllint enable
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./cdk
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - name: Install AWS CDK Toolkit
+        run: |
+          npm install -g aws-cdk@"==2.21.1"
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --no-deps \
+              -r ./requirements/base.txt \
+              -r ./requirements/dev.txt
+        id: req-installed
+      - name: Install cfn-lint
+        run: |
+          python -m venv ../.venv-cfnlint
+          . ../.venv-cfnlint/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --no-deps -r ./requirements/cfn-lint.txt
+          deactivate
+        id: cfn-lint-installed
+      - name: Run black
+        run: |
+          python -m black --check .
+        if: ${{ !cancelled() && steps.req-installed.outcome == 'success' }}
+      - name: Run isort
+        run: |
+          python -m isort --check-only --diff .
+        if: ${{ !cancelled() && steps.req-installed.outcome == 'success' }}
+      - name: Synthesize CloudFormation templates
+        run: |
+          mkdir templates
+          cdk synth playground > templates/playground.yaml
+        id: synthesized
+        if: ${{ !cancelled() && steps.req-installed.outcome == 'success' }}
+      - name: Run cfn-lint
+        run: |
+          ../.venv-cfnlint/bin/cfn-lint --info
+        if: ${{ !cancelled() && steps.cfn-lint-installed.outcome == 'success' && steps.synthesized.outcome == 'success' }}
