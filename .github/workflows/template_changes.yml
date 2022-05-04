@@ -1,0 +1,107 @@
+---
+# Report template changes by posting them as a comment to a commit
+name: Report template changes
+# yamllint disable rule:truthy
+on:
+  push:
+    branches:
+      - main
+# yamllint enable
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.skip }}
+      fetch_depth: ${{ steps.fetch_depth.outputs.fetch_depth }}
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Skip if this is the first commit in this branch
+        # yamllint disable rule:line-length
+        run: |
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "::set-output name=skip::true"
+          else
+            echo "::set-output name=skip::false"
+          fi
+        # yamllint enable
+        id: skip_check
+      - name: Determine fetch depth
+        run: |
+          import json
+          import os
+          github_context: dict = json.loads(os.getenv("GITHUB_CONTEXT", "{}"))
+          commits: list = github_context.get("event", {}).get("commits", [])
+          fetch_depth: int = len(commits) + 1
+          print(f"::set-output name=fetch_depth::{fetch_depth}")
+        shell: python
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        id: fetch_depth
+
+  template_changes:
+    needs: pre_job
+    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./cdk
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: ${{ needs.pre_job.outputs.fetch_depth }}
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - name: Install AWS CDK Toolkit
+        run: |
+          npm install -g aws-cdk@"==2.21.1"
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --no-deps \
+              -r ./requirements/base.txt \
+              -r ./requirements/dev.txt
+          mkdir templates
+      - name: Generate previous push's templates
+        run: |
+          echo "::group::previous push"
+          git checkout ${PREV_SHA} || git checkout "${CURRENT_SHA}~$((${FETCH_DEPTH}-1))"
+          python -m venv ../.venv-old
+          . ../.venv-old/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --no-deps \
+              -r ./requirements/base.txt \
+              -r ./requirements/dev.txt
+          cdk synth playground > templates/playground.old.yaml
+          deactivate
+          echo "::endgroup::"
+          echo "::group::Switch back to HEAD"
+          git checkout ${CURRENT_SHA}
+          echo "::endgroup::"
+        env:
+          PREV_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+          FETCH_DEPTH: ${{ needs.pre_job.outputs.fetch_depth }}
+      - name: Generate CDK diff
+        run: |
+          cdk --no-color diff \
+              --template ./templates/playground.old.yaml \
+              playground 2>&1 | tee ./templates/playground.diff
+      - name: Generate templates
+        run: |
+          cdk synth playground > ./templates/playground.yaml
+      - name: Report template changes
+        run: |
+          ls -l ./templates/
+          python ../.github/workflow_utils/pretty_diff.py
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
