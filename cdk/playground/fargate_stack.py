@@ -1,4 +1,4 @@
-from aws_cdk import Stack, aws_ec2 as ec2, aws_ecs as ecs
+from aws_cdk import Stack, aws_ec2 as ec2, aws_ecs as ecs, aws_logs as logs
 from constructs import Construct
 
 from .imported_role import ImportedRole
@@ -13,6 +13,10 @@ class FargateStack(Stack):
 
         cluster = ecs.Cluster(self, "FargateCluster", vpc=vpc)
         cluster.enable_fargate_capacity_providers()
+
+        log_group = logs.LogGroup(
+            self, "LogGroup", retention=logs.RetentionDays.ONE_MONTH
+        )
 
         task_definition = ecs.FargateTaskDefinition(
             self,
@@ -38,12 +42,19 @@ class FargateStack(Stack):
             ),
         )
 
+        log_driver = ecs.AwsLogDriver(
+            stream_prefix="celery",
+            log_group=log_group,
+            mode=ecs.AwsLogDriverMode.NON_BLOCKING,
+        )
+
         task_definition.add_container(
             "PlaygroundContainer",
             image=ecs.ContainerImage.from_registry("foo"),
             command=["bar"],
             entry_point=["executable"],
             environment={"SOMETHING": "pointless"},
+            logging=log_driver,
             memory_limit_mib=2048,
         )
 
